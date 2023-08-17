@@ -1,0 +1,13 @@
+无法识别x开头的标识符？
+如何解决——————————
+
+括号跟踪
+
+模块化 有的没的格式+函数  统一集成lex_process 而后 进行lex 
+
+token ---parser---> node 三文件
+
+assert(a)-------a非空
+node 为栈结构，peek为倒着来
+
+流程？exp type
