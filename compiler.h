@@ -213,6 +213,12 @@ struct node
             const char* name;
             struct node* val;
         } var;
+        
+        struct bracket{
+        	struct node* inner;
+        }bracket;
+        
+        
     };
     
 
@@ -224,6 +230,8 @@ struct node
         unsigned long lnum;
         unsigned long long llnum;
     };
+    
+    
 
 };
 
