@@ -143,6 +143,12 @@ enum
     NODE_TYPE_BLANK
 };
 
+struct array_brackets{
+    struct vector* n_brackets;
+};
+
+
+
 
 enum
 {
@@ -168,6 +174,13 @@ struct datatype
         struct node* struct_node;
         struct node* union_node;
     };
+    
+    struct array{
+    	struct array_brackets* brackets;
+        
+        
+        size_t size;//size*n_brackets
+	}array;
 };
 
 struct node
