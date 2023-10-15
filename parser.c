@@ -73,6 +73,22 @@ static bool token_next_is_operator(char * op)
     struct token* token = token_peek_next();
     return token_is_operator(token,op);
 }
+static void expect_op(const char* op){
+    struct token* next_token = token_next();
+    if(!next_token||next_token->type!= TOKEN_TYPE_OPERATOR|| !S_EQ(next_token->sval,op)){
+    	compiler_error(current_process,"expecting op %s but not",op);    
+    }
+}
+
+static void expect_sym(const char sym){
+    struct token* next_token = token_next();
+    if(!next_token||next_token->type!= TOKEN_TYPE_SYMBOL|| sym!=next_token->cval){
+    	compiler_error(current_process, "expecting sym %c but not",sym);    
+    }
+	    
+}
+
+
 
 
 void parse_single_token_to_node()
@@ -579,6 +595,29 @@ void make_variable_node_and_register(struct history* history, struct datatype* d
     node_push(var_node);
 }
 
+struct array_brackets* parse_array_brackets(struct history* history){
+    struct array_brackets* brackets = array_brackets_new();
+    while(token_next_is_operator('[')){
+    	expect_op("[");
+        if(token_is_symbol(token_peek_next(),']')){
+            expect_sym(']');//向前做一个nexttoken动作
+            break;    
+        }
+        
+        parse_expressionable_root(history);
+        expect_sym(']');
+        
+        struct node* exp_node = node_pop();
+        make_bracket_node(exp_node);
+        
+        struct node* bracket_node = node_pop();
+        array_brackets_add(brackets, bracket_node);
+    }
+    
+    return brackets;
+}
+
+
 
 void parse_variable(struct datatype* dtype, struct token* name_token, struct history* history){
     
@@ -586,6 +625,16 @@ void parse_variable(struct datatype* dtype, struct token* name_token, struct his
     //数组b[30]情况
     //to do
     //
+    struct array_brackets* brackets;
+    if(token_next_is_operator('[')){
+    	brackets = parse_array_brackets(history);
+        dtype->array.brackets = brackets;
+        dtype->array.size = array_brackets_calculate_size(dtype, brackets);
+        dtype->flag |= DATATYPE_FLAG_IS_ARRAY;
+    }
+    
+    
+    
 
     if(token_next_is_operator("=")){
         token_next();
