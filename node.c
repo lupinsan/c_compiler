@@ -67,6 +67,11 @@ struct node* node_peek_expressionable_or_null()
 
 }
 
+void make_bracket_node(struct node* node){
+	node_create(&(struct node){.type = NODE_TYPE_BRACKET, .bracket.inner = node});
+}
+
+
 void make_exp_node(struct node* left_node,struct node* right_node,const char* op)
 {
     assert(left_node);
