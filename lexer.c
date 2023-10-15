@@ -662,6 +662,7 @@ struct token* read_token()
             token=token_make_special_number();
         case 'x':
             token=token_make_special_number();
+		break;
         case ' ':
         case '\t':
             token=handle_whitespace();

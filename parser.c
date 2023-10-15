@@ -451,7 +451,7 @@ void parser_datatype_init_type_and_size_for_primitive(struct token* datatype_tok
     }
 
 
-    parser_datatype_adjust_for_sencondary(datatype_out,datatype_secondary_token);
+    parser_datatype_adjust_for_sencondary(datatype_out, datatype_secondary_token);
 }
 
 
@@ -505,12 +505,13 @@ void parse_datatype_type(struct datatype *dtype)
         {
             datatype_token = token_next();
         }
-    }
-    else
-    {
+	 else
+    	{
         datatype_token = parser_build_random_type_name();
         datatype_token->flags |= DATATYPE_FLAG_STRUCT_UNION_NO_NAME;
+    	}
     }
+    
 
     int pointer_depth = parser_get_pointer_depth();
 
@@ -535,23 +536,99 @@ void parse_datatype( struct datatype* dtype)
     parse_datatype_modifiers(dtype);
 
 }
+bool parser_is_int_valid_after_datatype(struct datatype* dtype){
+    return dtype->type == DATA_TYPE_LONG || dtype->type == DATA_TYPE_FLOAT || dtype == DATA_TYPE_DOUBLE;
+}
 
 
 
+void parser_ignore_int(struct datatype* dtype){
+    if(!token_is_keyword(token_peek_next(),"int")){
+        return;
+    }
 
-void parse_variable_function_or_struct_union(struct history* history)
+    if(!parser_is_int_valid_after_datatype(dtype)){
+        compile_error(current_process, "you provide a secondary int type is not supported\n");
+    }
+
+    token_next();
+}
+
+void parse_expressionable_root(struct history* history){
+    parse_expressionable(history);
+    struct node* result_node = node_pop();
+    node_push(result_node);
+}
+void make_variable_node(struct datatype* dtype, struct token* name_token, struct node* value_node){
+    const char* name_str = NULL;
+    if(name_token){
+        name_str = name_token->sval;
+    }
+
+    node_create(&(struct node){.type = NODE_TYPE_VARIABLE, .var.name = name_str,.var.type = *dtype,.var.val = value_node});
+
+}
+
+
+void make_variable_node_and_register(struct history* history, struct datatype* dtype, struct token* name_token,struct node* value_node){
+
+    make_variable_node(dtype, name_token, value_node);
+    struct node* var_node = node_pop();
+    //remember cal scope offset
+
+    node_push(var_node);
+}
+
+
+void parse_variable(struct datatype* dtype, struct token* name_token, struct history* history){
+    
+    struct node* value_node = NULL;
+    //数组b[30]情况
+    //to do
+    //
+
+    if(token_next_is_operator("=")){
+        token_next();
+        parse_expressionable_root(history);
+        value_node = node_pop();
+    }
+
+    make_variable_node_and_register(history,dtype,name_token, value_node);
+}
+
+
+
+void parse_variable_function_or_struct_union(struct history* history)//分析keyword总起，先分析datatype
 {
+	
     struct datatype dtype;
     parse_datatype(&dtype);
 
+    //eg. long int
+    parser_ignore_int(&dtype);
+
+    // int abc
+    struct token* name_token = token_next();
+    if(name_token->type != TOKEN_TYPE_IDENTIFIER){
+        compile_error(current_process, "Expecting a vaild name for the given var\n");
+    }
+    
+    parse_variable(&dtype, name_token, history);
+    
 
 }
 
 
 
+
+
+
+
+
+
 void parse_keyword(struct history* history)
 {
-    struct token* token= token_next();
+    struct token* token= token_peek_next();
     if(is_keyword_variable_modifier(token->sval) || keyword_is_datatype(token->sval))
     {
         parse_variable_function_or_struct_union(history);
@@ -618,6 +695,16 @@ void parse_expressionable(struct history* history)
 }
 
 
+void  parse_keyword_for_global(){
+    parse_keyword(history_begin(0));
+    struct node* node = node_pop();
+
+    node_push(node);
+
+    return;
+}
+
+
 parse_next()
 {
     struct token* token=token_peek_next();
@@ -636,7 +723,12 @@ parse_next()
             //parse_single_token_to_node();
             parse_expressionable(history_begin(0));
             break;
-
+        
+        case TOKEN_TYPE_KEYWORD:
+            parse_keyword_for_global();
+            break;
+        
+        return 0;
     }
 
 

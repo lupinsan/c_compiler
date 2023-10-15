@@ -31,6 +31,33 @@ struct pos
     const char* filename;
 };
 
+struct scope
+{
+    int flags;
+
+    struct vector* entities;
+    //堆栈对齐16字节
+    size_t size;
+
+
+    struct scope* parent;
+};
+
+enum{
+    SYMBOL_TYPE_NODE,
+    SYMBOL_TYPE_NATIVE_FUNCTION,
+    SYMBOL_TYPE_UNKNOWN
+};
+
+struct symbol{
+    const char* name;
+    int type;
+    void* data;
+};
+
+
+
+
 
 
 struct  compile_process
@@ -49,7 +76,28 @@ struct  compile_process
     struct vector* node_tree_vec;
 
     FILE* ofile;
+
+    struct {
+        struct scope* root;
+        struct scope* current; 
+    }scope;
+
+    struct 
+    {
+        struct vector* table;
+
+        struct vector* tables;
+    }symbols;
+    
+
+
+
+    
 };
+
+
+
+
 
 
 enum
@@ -102,8 +150,25 @@ enum
 
 };
 
+struct node;
 
+struct datatype
+{
+    int flags;
 
+    int type;
+
+    struct datatype* secondary;
+
+    const char* type_str;
+    size_t size; 
+    int pointer_depth;
+    union
+    {
+        struct node* struct_node;
+        struct node* union_node;
+    };
+};
 
 struct node
 {
@@ -128,7 +193,13 @@ struct node
             struct node* right;
             const char* op;
         }exp;
-        
+
+        struct var
+        {
+            struct datatype type;
+            const char* name;
+            struct node* val;
+        } var;
     };
     
 
@@ -177,23 +248,7 @@ enum
 
 
 
-struct datatype
-{
-    int flags;
 
-    int type;
-
-    struct datatype* secondary;
-
-    const char* type_str;
-    size_t size; 
-    int pointer_depth;
-    union
-    {
-        struct node* struct_node;
-        struct node* union_node;
-    };
-};
 
 
 
