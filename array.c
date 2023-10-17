@@ -22,11 +22,32 @@ struct vector* array_brackets_node_vector(struct array_brackets* brackets){
 }
 
 size_t array_brackets_calculate_size_from_index(struct datatype* dtype, struct array_brackets* brackets, int index){
-	return 0;
+	struct vector* array_vec = array_brackets_node_vector(brackets);
+    size_t size = dtype->size;
+
+    if(index>=vector_count(array_vec)){
+        return size;
+    }
+
+    vector_set_peek_pointer(array_vec, index);
+
+    struct node* array_bracket_node = vector_peek_ptr(array_vec);
+    if(!array_bracket_node){
+        return 0;
+    }
+
+    while(array_bracket_node){
+        assert(array_bracket_node->bracket.inner->type==NODE_TYPE_NUMBER);//数组号中只能有数字大小
+        int number = array_bracket_node->bracket.inner->llnum;
+        size *= number;
+        array_bracket_node = vector_peek_ptr(array_vec);
+    }
+
+    return size;
 }
 
-size_t array_brackets_calculate_size(struct datatype* dtype, struct array_brackets brackets){
-	return array_brakets_calculate_size_from_index(dtype, brackets, 0);
+size_t array_brackets_calculate_size(struct datatype* dtype, struct array_brackets* brackets){
+	return array_brackets_calculate_size_from_index(dtype, brackets, 0);
 }
 
 int array_total_indexes(struct datatype* dtype){

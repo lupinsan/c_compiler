@@ -176,9 +176,7 @@ struct datatype
     };
     
     struct array{
-    	struct array_brackets* brackets;
-        
-        
+    	struct array_brackets* brackets;        
         size_t size;//size*n_brackets
 	}array;
 };
@@ -218,6 +216,23 @@ struct node
         	struct node* inner;
         }bracket;
         
+        struct _struct{
+        const char* name;
+        struct node* body_n;
+
+        struct node* var;//struct创建时带的实例
+        }_struct;
+
+        struct body{
+            struct vector* statements;
+
+            size_t size;
+
+            bool padded;
+
+            struct node* largest_var_node;
+        }body;
+
         
     };
     
@@ -458,9 +473,35 @@ int parser(struct compile_process* process);
 
 
 bool token_is_nl_or_comment_or_newline_seperator(struct token* token);
-bool token_is_symol(struct token* token,char c);
+bool token_is_symbol(struct token* token,char c);
 bool token_is_primitive_keyword(struct token* token);
 bool token_is_operator(struct token* token,const char* op);
+
+struct array_brackets* array_brackets_new();
+void array_brackets_free(struct array_brackets* b);
+void array_brackets_add(struct array_brackets* brackets , struct node* bracket_node);
+struct vector* array_brackets_node_vector(struct array_brackets* brackets);
+size_t array_brackets_calculate_size_from_index(struct datatype* dtype, struct array_brackets* brackets, int index);
+size_t array_brackets_calculate_size(struct datatype* dtype, struct array_brackets* brackets);
+int array_total_indexes(struct datatype* dtype);
+
+struct scope* scope_alloc();
+void scope_dealloc(struct scope* scope);
+struct scope* scope_create_root(struct compile_process* process);
+void scope_free_root(struct compile_process* process);
+struct scope* sccope_new(struct compile_process* process, int flags);
+void scope_iteratoration_start(struct scope* scope);
+void scope_iteration_end(struct sccope* scope);
+void* scope_iterator_bacck(struct scope* sccope);
+void* scope_last_entity_at_scope(struct scope* scope);
+void* scope_last_entity_from_sccope_stop_at(struct scope* scope, struct scope* stop_scope);
+void* scope_last_entity_stop_at(struct compile_process* process, struct scope* stop_scope);
+void* scope_last_entity(struct compile_process* process);
+void scope_push(struct compile_process* process,void* ptr, size_t elem_size);
+void scope_finish(struct compile_process* process);
+struct scope* scope_current(struct compile_process* process);
+
+
 
 
 
@@ -475,7 +516,8 @@ void node_set_vector(struct vector* vec,struct vector* root_vec);
 bool node_is_expressionable(struct node* node);
 struct node* node_peek_expressionable_or_null();
 void make_exp_node(struct node* left_node,struct node* right_node,const char* op);
-
+void make_bracket_node(struct node* node);
+void make_body_node(struct vector* body_vec, size_t size, bool padded,struct node* largest_var_node);
 
 #define TOTAL_OPERATOR_GROUPS 14
 #define MAX_OPERATOR_IN_GROUP 12
@@ -495,5 +537,9 @@ struct expressionable_op_precedence_group
 
 
  bool datatype_is_struct_or_union_for_name(const char* name);
+ bool datatype_is_struct_or_union(struct datatype* dtype);
+
+
+
 
 #endif

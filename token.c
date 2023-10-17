@@ -12,7 +12,7 @@ bool token_is_keyword(struct token* token, const char* value)
     return token&&token->type == TOKEN_TYPE_KEYWORD && S_EQ(token->sval,value);
 }
 
-bool token_is_symol(struct token* token,char c)
+bool token_is_symbol(struct token* token,char c)
 {
     return token&&token->cval==c && token->type==TOKEN_TYPE_SYMBOL;
 }
@@ -29,7 +29,7 @@ bool token_is_nl_or_comment_or_newline_seperator(struct token* token)
     if(!token)
         return false;
         
-    return token->type==TOKEN_TYPE_NEWLINE || token->type==TOKEN_TYPE_COMMENT ||token_is_symol(token,'\\'); 
+    return token->type==TOKEN_TYPE_NEWLINE || token->type==TOKEN_TYPE_COMMENT ||token_is_symbol(token,'\\'); 
 }
 
 

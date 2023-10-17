@@ -33,9 +33,13 @@ struct history* history_down(struct history* history, int flags)
     return new_history;
 }
 
+void parser_scope_new(){
+    scope_new(current_process, 0);
+}
 
-
-
+void parser_scope_finish(){
+    scope_finish(current_process);
+}
 
 static void parser_ignore_nl_or_comment(struct token* token)
 {
@@ -73,17 +77,24 @@ static bool token_next_is_operator(char * op)
     struct token* token = token_peek_next();
     return token_is_operator(token,op);
 }
+
+static bool token_next_is_symbol(char c){
+    struct token* token = token_peek_next();
+    return token_is_symbol(token,c);
+}
+
+
 static void expect_op(const char* op){
     struct token* next_token = token_next();
     if(!next_token||next_token->type!= TOKEN_TYPE_OPERATOR|| !S_EQ(next_token->sval,op)){
-    	compiler_error(current_process,"expecting op %s but not",op);    
+    	compile_error(current_process,"expecting op %s but not",op);    
     }
 }
 
 static void expect_sym(const char sym){
     struct token* next_token = token_next();
     if(!next_token||next_token->type!= TOKEN_TYPE_SYMBOL|| sym!=next_token->cval){
-    	compiler_error(current_process, "expecting sym %c but not",sym);    
+    	compile_error(current_process, "expecting sym %c but not",sym);    
     }
 	    
 }
@@ -570,7 +581,7 @@ void parser_ignore_int(struct datatype* dtype){
     token_next();
 }
 
-void parse_expressionable_root(struct history* history){
+void parse_expressionable_root(struct history* history){//分析等号后的表达式
     parse_expressionable(history);
     struct node* result_node = node_pop();
     node_push(result_node);
@@ -597,7 +608,7 @@ void make_variable_node_and_register(struct history* history, struct datatype* d
 
 struct array_brackets* parse_array_brackets(struct history* history){
     struct array_brackets* brackets = array_brackets_new();
-    while(token_next_is_operator('[')){
+    while(token_next_is_operator("[")){
     	expect_op("[");
         if(token_is_symbol(token_peek_next(),']')){
             expect_sym(']');//向前做一个nexttoken动作
@@ -626,11 +637,11 @@ void parse_variable(struct datatype* dtype, struct token* name_token, struct his
     //to do
     //
     struct array_brackets* brackets;
-    if(token_next_is_operator('[')){
+    if(token_next_is_operator("[")){
     	brackets = parse_array_brackets(history);
         dtype->array.brackets = brackets;
         dtype->array.size = array_brackets_calculate_size(dtype, brackets);
-        dtype->flag |= DATATYPE_FLAG_IS_ARRAY;
+        dtype->flags |= DATATYPE_FLAG_IS_ARRAY;
     }
     
     
@@ -645,6 +656,70 @@ void parse_variable(struct datatype* dtype, struct token* name_token, struct his
     make_variable_node_and_register(history,dtype,name_token, value_node);
 }
 
+void parse_body_single_statement(size_t* variable_size, struct vector* body_vec, struct history* history)
+{
+    
+}
+
+void parse_body(size_t* variable_size, struct history* history){
+    parser_scope_new();
+    size_t tmp_size = 0x00;
+    if(!variable_size){
+        variable_size = &tmp_size;
+    }
+
+    struct vector* body_vec = vector_create(sizeof(struct node*));
+    if(!token_next_is_symbol('{'))
+    {
+        parse_body_single_statement(variable_size, body_vec, history);
+        parser_scope_finish();
+        return;
+    }
+    parser_scope_finish();
+}
+
+
+void parse_struct_no_new_scope(struct datatype* dtype)
+{
+
+}
+
+
+void parse_struct(struct datatype* dtype)
+{
+    bool is_forward_declaration = !token_is_symbol(token_peek_next(),'{');
+    if(!is_forward_declaration){
+        parser_scope_new();
+    }
+
+    parse_struct_no_new_scope(dtype);
+
+    if(!is_forward_declaration){
+        parser_scope_finish();
+    }
+
+
+
+    
+}
+
+
+
+void parse_struct_or_union(struct datatype* dtype){
+    switch (dtype->type)
+    {
+    case DATA_TYPE_STRUCT:
+        parse_struct(dtype);
+        break;
+    
+    case DATA_TYPE_UNION:
+        break;
+
+    default:
+        compile_error(current_process,"datatype is not a struct or union\n");
+        break;
+    }
+}
 
 
 void parse_variable_function_or_struct_union(struct history* history)//分析keyword总起，先分析datatype
@@ -652,6 +727,13 @@ void parse_variable_function_or_struct_union(struct history* history)//分析key
 	
     struct datatype dtype;
     parse_datatype(&dtype);
+
+    //struct and union
+
+    if(datatype_is_struct_or_union(&dtype) && token_next_is_symbol('{')){
+        parse_struct_or_union(&dtype);
+    }
+
 
     //eg. long int
     parser_ignore_int(&dtype);
@@ -791,6 +873,7 @@ parse_next()
 
 int parser(struct compile_process* process)
 {
+    scope_create_root(process);
     current_process=process;
 
     vector_set_peek_pointer(process->token_vec,0);

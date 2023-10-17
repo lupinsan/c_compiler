@@ -79,3 +79,9 @@ void make_exp_node(struct node* left_node,struct node* right_node,const char* op
     struct node* tmp=node_create(&(struct node){.exp.left=left_node, .exp.right=right_node, .exp.op=op, .type=NODE_TYPE_EXPRESSION});
 
 }
+
+void make_body_node(struct vector* body_vec, size_t size, bool padded,struct node* largest_var_node)
+{
+    node_create(&(struct node){.type = NODE_TYPE_BODY,.body.statements = body_vec, .body.size = size, .body.padded = padded,.body.largest_var_node = largest_var_node});
+
+}
