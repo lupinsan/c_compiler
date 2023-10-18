@@ -489,10 +489,10 @@ struct scope* scope_alloc();
 void scope_dealloc(struct scope* scope);
 struct scope* scope_create_root(struct compile_process* process);
 void scope_free_root(struct compile_process* process);
-struct scope* sccope_new(struct compile_process* process, int flags);
+struct scope* scope_new(struct compile_process* process, int flags);
 void scope_iteratoration_start(struct scope* scope);
-void scope_iteration_end(struct sccope* scope);
-void* scope_iterator_bacck(struct scope* sccope);
+void scope_iteration_end(struct scope* scope);
+void* scope_iterator_back(struct scope* sccope);
 void* scope_last_entity_at_scope(struct scope* scope);
 void* scope_last_entity_from_sccope_stop_at(struct scope* scope, struct scope* stop_scope);
 void* scope_last_entity_stop_at(struct compile_process* process, struct scope* stop_scope);
@@ -538,6 +538,10 @@ struct expressionable_op_precedence_group
 
  bool datatype_is_struct_or_union_for_name(const char* name);
  bool datatype_is_struct_or_union(struct datatype* dtype);
+size_t datatype_size_for_array_access(struct datatype* dtype);
+size_t datatype_element_size(struct datatype* dtype);
+size_t datatype_size_no_ptr(struct datatype* dtype);
+size_t datatype_size(struct datatype* dtype);
 
 
 

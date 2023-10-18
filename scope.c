@@ -40,7 +40,7 @@ void scope_free_root(struct compile_process* process){
     return;
 }
 
-struct scope* sccope_new(struct compile_process* process, int flags){
+struct scope* scope_new(struct compile_process* process, int flags){
     assert(process->scope.root);
     assert(process->scope.current);
 
@@ -59,12 +59,12 @@ void scope_iteratoration_start(struct scope* scope){
     }
 }
 
-void scope_iteration_end(struct sccope* scope){
+void scope_iteration_end(struct scope* scope){
 
 
 }
 
-void* scope_iterator_bacck(struct scope* sccope){
+void* scope_iterator_back(struct scope* sccope){
     if(vector_count(sccope->entities)==0)
         return NULL;
     
