@@ -102,8 +102,6 @@ static void expect_sym(const char sym){
 }
 
 
-
-
 void parse_single_token_to_node()
 {
     struct token* token= token_next();
@@ -681,10 +679,35 @@ void parse_statement(struct history* history)
     expect_sym(';');
 
 }
-
 void parser_append_size_for_node(struct history* history, size_t* _variable_size, struct node* node)
 {
-    compile_error(current_process, "Parsing size not yet implemented\n");
+     *_variable_size += variable_size(node);
+     if (node->var.type.flags & DATATYPE_FLAG_IS_POINTER)
+     {
+        return;
+     }
+    
+     struct node* largest_var_node = variable_struct_or_union_body_node(node)->body.largest_var_node;
+}   
+
+
+void parser_append_size_for_node_struct_union(struct history* history, size_t* _variable_size, struct node* node)
+{
+    if(!node)
+    {
+        return;
+    }
+    if(node->type == NODE_TYPE_VARIABLE)
+    {
+        if(node_is_struct_or_union_variable(node))
+        {
+            parser_append_size_for_node_struct_union(history, _variable_size, node);
+        }
+    }
+    else if(node->type == NODE_TYPE_VARIABLE_LIST)
+    {
+
+    }
 
 
 }
