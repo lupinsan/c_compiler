@@ -7,10 +7,50 @@ extern struct expressionable_op_precedence_group op_precedence[TOTAL_OPERATOR_GR
 
 extern struct node* parser_current_body;
 
+enum
+{
+    PARSER_SCOPE_ENTITY_ON_STACK = 0b00000001,
+    PARSER_SCOPE_ENTITY_STRUCTURE_SCOPE = 0b00000010
+};
+
+struct parser_scope_entity
+{   
+    int flags;
+
+    int stack_offest;
+
+    struct node* node;//变量declaration
+};
+
+struct parser_scope_entity* parser_new_scope_entity(struct node* node, int stack_offset,int flags)
+{
+    struct parser_scope_entity* entity = calloc(1,sizeof(struct parser_scope_entity));
+    entity->node = node;
+    entity->flags = flags;
+    entity->stack_offest = stack_offset;
+    return entity;
+}
+
+struct parser_scope_entity* parser_scope_last_entity_stop_global_scope()
+{
+    return scope_last_entity_stop_at(current_process, current_process->scope.root);
+}
+
 struct history
 {
     int flags;
 };
+
+enum
+{
+    HISTORY_FLAG_INSIDE_UNION = 0b00000001,
+    HISTORY_FLAG_IS_UPWARD_STACK = 0b00000010,
+    HISTORY_FLAG_IS_GLOBAL_SCOPE = 0b00000100,
+    HISTORY_FLAG_INSIDE_STRUCTURE = 0b00001000
+};
+
+
+
 
 int parse_expressionable_single(struct history* history);
 
@@ -42,6 +82,18 @@ void parser_scope_new(){
 void parser_scope_finish(){
     scope_finish(current_process);
 }
+
+struct parser_scope_entity* parser_scope_last_entity()
+{
+    return scope_last_entity(current_process);
+}
+
+void parser_scope_push(struct parser_scope_entity* entity, size_t size)
+{
+    scope_push(current_process, entity, size);
+}
+
+
 
 static void parser_ignore_nl_or_comment(struct token* token)
 {
@@ -596,12 +648,81 @@ void make_variable_node(struct datatype* dtype, struct token* name_token, struct
 
 }
 
+void parser_scope_offset_for_stack(struct node* node, struct history* history)//新的栈点位--实体可能是变量
+{
+    struct parser_scope_entity* last_entity = parser_scope_last_entity_stop_global_scope();
+    bool upward_stack = history->flags & HISTORY_FLAG_IS_UPWARD_STACK;//参数向上，变量向下
+    int offset = -variable_size(node);
+    if(upward_stack)
+    {
+        compile_error(current_process, "NOT yet implement\n");
+    }
+
+    if(last_entity)
+    {
+        offset += variable_node(last_entity->node)->var.aoffset;
+        if(variable_node_is_primitive(node))
+        {
+            variable_node(node)->var.padding = padding(upward_stack ? offset : -offset, node->var.type.size);
+        }
+    }
+
+}
+
+void parser_scope_offset_for_global(struct node* node ,struct history* history)
+{
+
+}
+
+void parser_scope_offset_for_structure(struct node* node , struct history* history)
+{
+    int offset = 0;
+    struct parser_scope_entity* last_entity = parser_scope_last_entity();
+    if(last_entity)
+    {
+        offset += last_entity->stack_offest +last_entity->node->var.type.size;
+        if(variable_node_is_primitive(node))
+        {
+            node->var.padding = padding(offset, node-> var.type.size);
+        }
+
+        node->var.aoffset = offset + node->var.padding;
+    }
+
+
+
+}
+
+void parser_scope_offset(struct node* node, struct history* history)
+{
+    if(history->flags & HISTORY_FLAG_IS_GLOBAL_SCOPE)
+    {
+        parser_scope_offset_for_global(node, history);
+        return;
+    }
+
+    if(history->flags & HISTORY_FLAG_INSIDE_STRUCTURE)
+    {
+        parser_scope_offset_for_structure(node, history);
+        return;
+    }
+
+
+    parser_scope_offset_for_stack(node, history);
+}
+
 
 void make_variable_node_and_register(struct history* history, struct datatype* dtype, struct token* name_token,struct node* value_node){
 
     make_variable_node(dtype, name_token, value_node);
     struct node* var_node = node_pop();
     //remember cal scope offset
+
+    parser_scope_offset(var_node, history);
+
+    struct parser_scope_entity* tmp = parser_new_scope_entity(var_node, value_node->var.aoffset,0);
+    parser_scope_push(tmp,var_node->var.type.size);
+
 
     node_push(var_node);
 }
@@ -656,8 +777,21 @@ void parse_variable(struct datatype* dtype, struct token* name_token, struct his
     make_variable_node_and_register(history,dtype,name_token, value_node);
 }
 
-void parse_symbol(){
-    compile_error(current_process, "Symbols are not yet supported\n");
+void parse_body(size_t* variable_size, struct history* history);
+
+
+void parse_symbol()
+{
+    if(token_next_is_symbol('{'))
+    {
+        size_t variable_size = 0;
+        struct history* history = history_begin(HISTORY_FLAG_IS_GLOBAL_SCOPE);
+        parse_body(&variable_size, history);
+
+        struct node* body_node = node_pop();
+
+        node_push(body_node);
+    }
 }
 
 
@@ -688,7 +822,24 @@ void parser_append_size_for_node(struct history* history, size_t* _variable_size
      }
     
      struct node* largest_var_node = variable_struct_or_union_body_node(node)->body.largest_var_node;
+    if(largest_var_node)
+    {
+        *_variable_size+=align_value(*_variable_size, largest_var_node->var.type.size);
+    }
+
 }   
+
+void parser_append_size_for_variable_list(struct history* history, size_t* variable_size, struct vector* vec)
+{
+    vector_set_peek_pointer(vec,0);
+    struct node* node = vector_peek_ptr(vec);
+    while(node)
+    {
+        parser_append_size_for_node(history, variable_size, node);
+        node = vector_peek_ptr(vec);
+    }
+}
+
 
 
 void parser_append_size_for_node_struct_union(struct history* history, size_t* _variable_size, struct node* node)
@@ -702,20 +853,40 @@ void parser_append_size_for_node_struct_union(struct history* history, size_t* _
         if(node_is_struct_or_union_variable(node))
         {
             parser_append_size_for_node_struct_union(history, _variable_size, node);
+            return;
         }
+
+        *_variable_size += variable_size(node);
     }
     else if(node->type == NODE_TYPE_VARIABLE_LIST)
     {
-
+        parser_append_size_for_variable_list(history, _variable_size, node->var_list.list);
     }
-
 
 }
 
-void parser_finalize_body(struct history* history, struct node* body_node, struct vector* body_vec,size_t* variable_size, struct node* largest_align_eligible_var_node, struct node* largest_possible_var_node)
+void parser_finalize_body(struct history* history, struct node* body_node, struct vector* body_vec,size_t* _variable_size, struct node* largest_align_eligible_var_node, struct node* largest_possible_var_node)
 {
+    if(history->flags & HISTORY_FLAG_INSIDE_UNION)
+    {
+        if(largest_possible_var_node)
+        {
+            *_variable_size = align_value(_variable_size, largest_align_eligible_var_node->var.type.size);
+        }
+    }
+
+    int padding = compute_sum_padding(body_vec);
+    *_variable_size+=padding;
+
+    if(largest_align_eligible_var_node)
+    {
+        *_variable_size = align_value(*_variable_size, largest_align_eligible_var_node->var.type.size);
+    }
+
+    bool padded = padding!=0;
+
     body_node->body.largest_var_node = largest_align_eligible_var_node;
-    body_node->body.padded = false;
+    body_node->body.padded = padded;
     body_node->body.size = *variable_size;
     body_node->body.statements = body_vec;
 }
@@ -749,7 +920,60 @@ void parse_body_single_statement(size_t* variable_size, struct vector* body_vec,
     node_push(body_node);
 }
 
-void parse_body(size_t* variable_size, struct history* history){
+void parser_body_mutiple_statements(size_t* varibale_size, struct vector* body_vec , struct history* history)
+{
+    make_body_node(NULL, 0, false, NULL);
+    struct node* body_node = node_pop();
+    body_node->binded.owner = parser_current_body;
+    parser_current_body = body_node;
+
+    struct node* stmt_node = NULL;
+    struct node* largest_possiable_var_node = NULL;
+    struct node* largest_align_eligible_var_node = NULL;
+
+    expect_sym('{');
+
+    while(!token_next_is_symbol('}'))
+    {
+        parse_statement(history_down(history, history->flags));
+        stmt_node = node_pop();
+        if(stmt_node->type == NODE_TYPE_VARIABLE)
+        {
+            if(!largest_possiable_var_node ||
+                largest_possiable_var_node->var.type.size <= stmt_node ->var.type.size)
+            {
+                largest_possiable_var_node = stmt_node;
+            }
+            if(variable_node_is_primitive(stmt_node))
+            {
+                if(!largest_align_eligible_var_node ||
+                    largest_align_eligible_var_node->var.type.size <= stmt_node ->var.type.size)
+                {
+                    largest_align_eligible_var_node = stmt_node;
+                }
+            }
+        }
+
+
+        //推进bodyvec中
+        vector_push(body_vec, &stmt_node);
+
+        // change variable size
+        parser_append_size_for_node(history, variable_size, variable_node_or_list(stmt_node));
+
+        parser_finalize_body(history, body_node, body_vec, variable_size, largest_align_eligible_var_node,largest_possiable_var_node);
+
+    }
+
+    expect_sym('}');
+
+    parser_current_body = body_node->binded.owner;
+    node_push(body_node);
+}
+
+
+void parse_body(size_t* variable_size, struct history* history)
+{
     parser_scope_new();
     size_t tmp_size = 0x00;
     if(!variable_size){
@@ -763,7 +987,13 @@ void parse_body(size_t* variable_size, struct history* history){
         parser_scope_finish();
         return;
     }
+
+    //some sta between {}
+    parser_body_mutiple_statements(variable_size, body_vec, history);
     parser_scope_finish();
+
+    #warning "need to adjust the function stack size"
+
 }
 
 
@@ -924,6 +1154,9 @@ void  parse_keyword_for_global(){
 }
 
 
+
+
+
 parse_next()
 {
     struct token* token=token_peek_next();
@@ -946,7 +1179,9 @@ parse_next()
         case TOKEN_TYPE_KEYWORD:
             parse_keyword_for_global();
             break;
-        
+        case TOKEN_TYPE_SYMBOL:
+            parse_symbol();
+            break;
         return 0;
     }
 

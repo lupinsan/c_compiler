@@ -211,6 +211,7 @@ struct node
             const char* name;
             struct node* val;
             int padding;
+            int aoffset;
         } var;
         
         struct var_list
@@ -521,6 +522,10 @@ void node_set_vector(struct vector* vec,struct vector* root_vec);
 
 bool node_is_expressionable(struct node* node);
 bool node_is_struct_or_union_variable(struct node* node);
+bool variable_node_is_primitive(struct node* node);
+struct node* variable_node_or_list(struct node* node);
+
+
 struct node* node_peek_expressionable_or_null();
 void make_exp_node(struct node* left_node,struct node* right_node,const char* op);
 void make_bracket_node(struct node* node);
@@ -545,6 +550,8 @@ struct expressionable_op_precedence_group
 
  bool datatype_is_struct_or_union_for_name(const char* name);
  bool datatype_is_struct_or_union(struct datatype* dtype);
+bool datatype_is_primitive(struct datatype* dtype);
+
 size_t datatype_size_for_array_access(struct datatype* dtype);
 size_t datatype_element_size(struct datatype* dtype);
 size_t datatype_size_no_ptr(struct datatype* dtype);
@@ -554,6 +561,8 @@ size_t datatype_size(struct datatype* dtype);
 size_t variable_size(struct node* var_node);
 size_t variable_size_for_list(struct node*var_list_node);
 
+
+struct node* variable_node(struct node* node);
 int padding(int val, int to);
 int align_value(int val, int to);
 int align_value_treat_positive(int val, int to);//处理栈时
