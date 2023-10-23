@@ -815,13 +815,13 @@ void parse_statement(struct history* history)
 }
 void parser_append_size_for_node(struct history* history, size_t* _variable_size, struct node* node)
 {
-     *_variable_size += variable_size(node);
+     *_variable_size += variable_size(node);//int x ; 返回x中var.type.size
      if (node->var.type.flags & DATATYPE_FLAG_IS_POINTER)
      {
         return;
      }
     
-     struct node* largest_var_node = variable_struct_or_union_body_node(node)->body.largest_var_node;
+     struct node* largest_var_node = variable_struct_or_union_body_node(node)->body.largest_var_node;//对于struct 与 union node返回其body中最大的node
     if(largest_var_node)
     {
         *_variable_size+=align_value(*_variable_size, largest_var_node->var.type.size);
@@ -867,7 +867,7 @@ void parser_append_size_for_node_struct_union(struct history* history, size_t* _
 
 void parser_finalize_body(struct history* history, struct node* body_node, struct vector* body_vec,size_t* _variable_size, struct node* largest_align_eligible_var_node, struct node* largest_possible_var_node)
 {
-    if(history->flags & HISTORY_FLAG_INSIDE_UNION)
+    if(history->flags & HISTORY_FLAG_INSIDE_UNION)//对于union进行修改varisize
     {
         if(largest_possible_var_node)
         {
@@ -878,12 +878,14 @@ void parser_finalize_body(struct history* history, struct node* body_node, struc
     int padding = compute_sum_padding(body_vec);
     *_variable_size+=padding;
 
-    if(largest_align_eligible_var_node)
+    if(largest_align_eligible_var_node)//原始数据类型
     {
         *_variable_size = align_value(*_variable_size, largest_align_eligible_var_node->var.type.size);
     }
 
     bool padded = padding!=0;
+
+    //将vec以及padding全加到bodynode中
 
     body_node->body.largest_var_node = largest_align_eligible_var_node;
     body_node->body.padded = padded;
@@ -959,8 +961,9 @@ void parser_body_mutiple_statements(size_t* varibale_size, struct vector* body_v
         vector_push(body_vec, &stmt_node);
 
         // change variable size
-        parser_append_size_for_node(history, variable_size, variable_node_or_list(stmt_node));
+        parser_append_size_for_node(history, variable_size, variable_node_or_list(stmt_node));//对于struct等先进行对于最大body节点的align
 
+        //body vec 中node.var.padding已经全部计算完毕，待下函数计算总padding数
         parser_finalize_body(history, body_node, body_vec, variable_size, largest_align_eligible_var_node,largest_possiable_var_node);
 
     }
