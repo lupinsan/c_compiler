@@ -720,7 +720,7 @@ void make_variable_node_and_register(struct history* history, struct datatype* d
 
     parser_scope_offset(var_node, history);
 
-    struct parser_scope_entity* tmp = parser_new_scope_entity(var_node, value_node->var.aoffset,0);
+    struct parser_scope_entity* tmp = parser_new_scope_entity(var_node, var_node->var.aoffset,0);
     parser_scope_push(tmp,var_node->var.type.size);
 
 
@@ -821,8 +821,10 @@ void parser_append_size_for_node(struct history* history, size_t* _variable_size
         return;
      }
     
-     struct node* largest_var_node = variable_struct_or_union_body_node(node)->body.largest_var_node;
-    if(largest_var_node)
+
+    struct node* largest_var_node = variable_struct_or_union_body_node(node)? variable_struct_or_union_body_node(node)->body.largest_var_node: NULL;
+
+    if(largest_var_node)//仅仅对struct内的最大节点align
     {
         *_variable_size+=align_value(*_variable_size, largest_var_node->var.type.size);
     }
@@ -887,7 +889,7 @@ void parser_finalize_body(struct history* history, struct node* body_node, struc
 
     body_node->body.largest_var_node = largest_align_eligible_var_node;
     body_node->body.padded = padded;
-    body_node->body.size = *variable_size;
+    body_node->body.size = *_variable_size;
     body_node->body.statements = body_vec;
 }
 
@@ -920,7 +922,7 @@ void parse_body_single_statement(size_t* variable_size, struct vector* body_vec,
     node_push(body_node);
 }
 
-void parser_body_mutiple_statements(size_t* varibale_size, struct vector* body_vec , struct history* history)
+void parser_body_mutiple_statements(size_t* variable_size, struct vector* body_vec , struct history* history)
 {
     make_body_node(NULL, 0, false, NULL);
     struct node* body_node = node_pop();
@@ -953,19 +955,18 @@ void parser_body_mutiple_statements(size_t* varibale_size, struct vector* body_v
                 }
             }
         }
-
-
         //推进bodyvec中
         vector_push(body_vec, &stmt_node);
 
         // change variable size
         parser_append_size_for_node(history, variable_size, variable_node_or_list(stmt_node));
 
-        parser_finalize_body(history, body_node, body_vec, variable_size, largest_align_eligible_var_node,largest_possiable_var_node);
-
     }
 
     expect_sym('}');
+
+    parser_finalize_body(history, body_node, body_vec, variable_size, largest_align_eligible_var_node,largest_possiable_var_node);
+
 
     parser_current_body = body_node->binded.owner;
     node_push(body_node);
@@ -997,8 +998,41 @@ void parse_body(size_t* variable_size, struct history* history)
 }
 
 
-void parse_struct_no_new_scope(struct datatype* dtype)
+void parse_struct_no_new_scope(struct datatype* dtype, bool is_forward_declaration)
 {
+    struct node* body_node = NULL;
+    size_t body_variable_size = 0;
+
+    if(!is_forward_declaration)
+    {
+        parse_body(&body_variable_size, history_begin(HISTORY_FLAG_INSIDE_STRUCTURE));
+        body_node = node_pop();
+    }
+
+    make_struct_node(dtype->type_str, body_node);
+    struct node* struct_node = node_pop();
+    if(body_node)
+    {
+        dtype->size = body_node->body.size;
+    }
+    dtype->struct_node = struct_node;
+
+    if(!token_peek_next()->type ==TOKEN_TYPE_IDENTIFIER)
+    {
+        struct token* var_name = token_next();
+        struct_node->flags |= NODE_FLAG_HAS_VARIABLE_COMBINED;
+        if(dtype->flags & DATATYPE_FLAG_STRUCT_UNION_NO_NAME)
+        {
+            dtype->type_str = var_name->sval;
+            dtype->flags &= ~DATATYPE_FLAG_STRUCT_UNION_NO_NAME;
+            struct_node->_struct.name = var_name->sval;
+        }
+
+        make_variable_node_and_register(history_begin(0), dtype, var_name, NULL);
+    }
+
+    expect_sym(';');
+    node_push(struct_node);
 
 }
 
@@ -1010,7 +1044,7 @@ void parse_struct(struct datatype* dtype)
         parser_scope_new();
     }
 
-    parse_struct_no_new_scope(dtype);
+    parse_struct_no_new_scope(dtype, is_forward_declaration);
 
     if(!is_forward_declaration){
         parser_scope_finish();
@@ -1050,6 +1084,11 @@ void parse_variable_function_or_struct_union(struct history* history)//分析key
 
     if(datatype_is_struct_or_union(&dtype) && token_next_is_symbol('{')){
         parse_struct_or_union(&dtype);
+
+        struct node* su_node = node_pop();
+        symresolver_build_for_node(current_process,su_node);
+        node_push(su_node);
+        return;
     }
 
 
