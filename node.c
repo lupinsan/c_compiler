@@ -88,6 +88,19 @@ void make_body_node(struct vector* body_vec, size_t size, bool padded,struct nod
 
 }
 
+void make_struct_node(const char* name, struct node* body_node)
+{
+    int flags = 0;
+    if(!body_node)
+    {
+        flags |= NODE_FLAG_IS_FORWARD_DECLARATION;
+    }
+
+    node_create(&(struct node){.type = NODE_TYPE_STRUCT, ._struct.body_n = body_node, ._struct.name=name,.flags = flags});
+    
+}
+
+
 bool node_is_struct_or_union_variable(struct node* node)
 {
     if(node->type !=NODE_TYPE_VARIABLE)
