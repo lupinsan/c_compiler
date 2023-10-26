@@ -6,6 +6,9 @@ static struct token* parser_last_token;
 extern struct expressionable_op_precedence_group op_precedence[TOTAL_OPERATOR_GROUPS];
 
 extern struct node* parser_current_body;
+extern struct node* parser_current_function;
+
+
 
 enum
 {
@@ -46,7 +49,8 @@ enum
     HISTORY_FLAG_INSIDE_UNION = 0b00000001,
     HISTORY_FLAG_IS_UPWARD_STACK = 0b00000010,
     HISTORY_FLAG_IS_GLOBAL_SCOPE = 0b00000100,
-    HISTORY_FLAG_INSIDE_STRUCTURE = 0b00001000
+    HISTORY_FLAG_INSIDE_STRUCTURE = 0b00001000,
+    HISTORY_FLAG_INSIDE_FUNCTION_BODY = 0b00010000
 };
 
 
@@ -111,7 +115,8 @@ struct token* token_next()
 {
     struct token* next_token = vector_peek_no_increment(current_process->token_vec);
     parser_ignore_nl_or_comment(next_token);
-    current_process->pos=next_token->pos;//若为null时？
+    if(next_token)
+        current_process->pos=next_token->pos;//若为null时？
     parser_last_token=next_token;
     return vector_peek(current_process->token_vec);
 
@@ -533,6 +538,25 @@ void parser_datatype_init_type_and_size_for_primitive(struct token* datatype_tok
     parser_datatype_adjust_for_sencondary(datatype_out, datatype_secondary_token);
 }
 
+size_t size_of_struct(const char* struct_name)
+{
+    struct symbol* sym = symresolver_get_symbol(struct_name);
+    if(!sym)
+    {
+        return 0;
+    }
+
+    assert(sym->type == SYMBOL_TYPE_NODE);
+    struct node* node =sym->data;
+    assert(node->type==NODE_TYPE_STRUCT);
+    return node->_struct.body_n->body.size;
+}
+
+
+
+
+
+
 
 void parser_datatype_init_type_and_size(struct token* datatype_token, struct token* datatype_secondary_token ,struct datatype* datatype_out, int pointer_depth, int expected_type)
 {
@@ -548,16 +572,16 @@ void parser_datatype_init_type_and_size(struct token* datatype_token, struct tok
             
             break;
         case DATA_TYPE_EXPECT_STRUCT:
+            datatype_out->type = DATA_TYPE_STRUCT;
+            datatype_out->size = size_of_struct(datatype_token->sval);
+            datatype_out->struct_node = struct_node_from_for_name(current_process, datatype_token->sval);
+            break;
         case DATA_TYPE_EXPECT_UNION:
-            compile_error(current_process,"stuct and union xxxxx\n");
+            compile_error(current_process," union xxxxx\n");
             break;
         default:
             compile_error(current_process,"BUG: Unsupported datatype expectation\n");
-        
     }
-
-
-
 }
 void parser_datatype_init(struct token* datatype_token, struct token* datatype_secondary_token, struct datatype* datatype_out, int pointer_depth, int expected_type)
 {
@@ -594,7 +618,7 @@ void parse_datatype_type(struct datatype *dtype)
 
     int pointer_depth = parser_get_pointer_depth();
 
-    parser_datatype_init( datatype_token,  datatype_secondary_token , dtype,  pointer_depth,  expected_type);
+    parser_datatype_init( datatype_token,  datatype_secondary_token , dtype,  pointer_depth,  expected_type);//如果struct等类型在符号表中，则直接导出size以及_struct_node
 
 }
 
@@ -778,6 +802,54 @@ void parse_variable(struct datatype* dtype, struct token* name_token, struct his
 }
 
 void parse_body(size_t* variable_size, struct history* history);
+
+void parse_function_body(struct history* history)
+{
+    parse_body(NULL,history_down(history,history->flags | HISTORY_FLAG_INSIDE_FUNCTION_BODY));
+}
+
+
+void parse_function(struct datatype* ret_type, struct token* name_token, struct history* history)
+{
+    struct vector* arguments_vector = NULL;
+    parser_scope_new();
+    make_function_node(ret_type, name_token->sval, NULL,NULL);
+    struct node* function_node = node_peek();
+    parser_current_function = function_node;
+
+    if(datatype_is_struct_or_union(ret_type))//main函数提供struct指针，func直接在指针上构造或者修改
+    {
+        function_node->func.args.stack_addition+=DATA_SIZE_DWORD;
+    }
+    
+    expect_op("(");
+    #warning "need to parse args"
+
+    expect_sym(')');
+
+    function_node->func.args.vector = arguments_vector;
+    if(symresolver_get_symbol_for_native_function(current_process,name_token->sval))
+    {
+        function_node->func.flags|= FUNCTION_NODE_IS_NATIVE;
+    }
+    if(token_next_is_symbol('('))
+    {
+        parse_function_body(history_begin(0));
+        struct node* body_node = node_pop;
+        function_node->func.body_n = body_node;
+    }
+    else
+    {
+        expect_sym(';');
+    }
+
+
+    parser_current_function = NULL;//c中不可嵌套，若为c++需要使用此变量 
+    parser_scope_finish();
+
+
+
+}
 
 
 void parse_symbol()
@@ -1021,7 +1093,7 @@ void parse_struct_no_new_scope(struct datatype* dtype, bool is_forward_declarati
     }
     dtype->struct_node = struct_node;
 
-    if(!token_peek_next()->type ==TOKEN_TYPE_IDENTIFIER)
+    if(token_is_identifier(token_peek_next()))
     {
         struct token* var_name = token_next();
         struct_node->flags |= NODE_FLAG_HAS_VARIABLE_COMBINED;
@@ -1082,18 +1154,22 @@ void parse_variable_function_or_struct_union(struct history* history)//分析key
 {
 	
     struct datatype dtype;
-    parse_datatype(&dtype);
+    parse_datatype(&dtype);//如果struct等类型在符号表中，则直接导出size以及_struct_node
 
+    //至此已经分析完datatype
     //struct and union
 
     if(datatype_is_struct_or_union(&dtype) && token_next_is_symbol('{')){
         parse_struct_or_union(&dtype);
-
+    //struct 已经分析完成包括分号以后的变量
+    
         struct node* su_node = node_pop();
-        symresolver_build_for_node(current_process,su_node);
+        symresolver_build_for_node(current_process,su_node);//传入数据为struct类型的node
         node_push(su_node);
         return;
     }
+
+
 
 
     //eg. long int
@@ -1105,6 +1181,15 @@ void parse_variable_function_or_struct_union(struct history* history)//分析key
         compile_error(current_process, "Expecting a vaild name for the given var\n");
     }
     
+    if(token_next_is_operator("("))
+    {
+        parse_function(&dtype,name_token,history);
+        return;
+    }
+
+    
+
+
     parse_variable(&dtype, name_token, history);
     
 

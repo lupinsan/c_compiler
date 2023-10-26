@@ -242,7 +242,28 @@ struct node
             struct node* largest_var_node;
         }body;
 
-        
+        struct function
+        {
+            int flags;
+            //return type
+            struct datatype rtype;
+
+            //name
+            const char* name;
+
+            struct function_arguments
+            {   
+                struct vector* vector;
+                size_t stack_addition;
+
+            } args;
+
+            //指向bodynode的指针
+            struct node* body_n;
+            //函数栈
+            size_t stack_size;
+
+        } func;
     };
     
 
@@ -314,6 +335,10 @@ enum
     DATA_SIZE_DDWORD = 8
 };
 
+enum
+{
+    FUNCTION_NODE_IS_NATIVE = 0b00000001
+};
 
 
 
@@ -473,6 +498,7 @@ void compile_warning(struct compile_process* compiler,const char* msg, ... );
 
 
 bool token_is_keyword(struct token* token, const char* value);
+bool token_is_identifier(struct token* token);
 bool keyword_is_datatype(const char* str);
 
 
@@ -526,6 +552,9 @@ bool node_is_expressionable(struct node* node);
 bool node_is_struct_or_union_variable(struct node* node);
 bool variable_node_is_primitive(struct node* node);
 struct node* variable_node_or_list(struct node* node);
+struct node* node_from_sym(struct symbol* sym);
+struct node* node_from_symbol(struct compile_process* current_process, const char* name);
+struct node* struct_node_from_for_name(struct compile_process* current_process, const char* name);
 
 
 struct node* node_peek_expressionable_or_null();
@@ -533,6 +562,8 @@ void make_exp_node(struct node* left_node,struct node* right_node,const char* op
 void make_bracket_node(struct node* node);
 void make_body_node(struct vector* body_vec, size_t size, bool padded,struct node* largest_var_node);
 void make_struct_node(const char* name, struct node* body_node);
+struct node*  make_function_node(struct datatype* ret_type, const char* name, struct vector* arguments, struct node* body_node);
+
 
 
 
@@ -574,8 +605,12 @@ int align_value_treat_positive(int val, int to);//处理栈时
 int compute_sum_padding(struct vector* vec);
 struct node* variable_struct_or_union_body_node(struct node* node);
 
+struct symbol* symresolver_get_symbol_for_native_function(struct compile_process* process, const char* name);
 void symresolver_build_for_node(struct compile_process* process, struct node* node);
-
+struct symbol* symresolver_get_symbol(struct compile_process* process, const char* name);
+void symresolver_initialize(struct compile_process* process);
+void symresolver_new_table(struct compile_process* process);
+void symresolver_end_table(struct compile_process* process);
 
 
 #endif

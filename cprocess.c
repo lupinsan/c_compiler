@@ -30,6 +30,9 @@ struct  compile_process* compile_process_create(const char* filename,   const ch
         process->cfile.abs_path=filename;
         process->ofile=out_file;
         process->flags=flags;
+
+        symresolver_initialize(process);
+        symresolver_new_table(process);
         return process;
 }
 

@@ -23,7 +23,8 @@ void symresolver_end_table(struct compile_process* process){
 }
 
 
-struct symbol* symresolver_get_symbol(struct compile_process* process, const char* name){
+struct symbol* symresolver_get_symbol(struct compile_process* process, const char* name)
+{
     vector_set_peek_pointer(process->symbols.table,0);
     struct symbol* symbol = vector_peek_ptr(process->symbols.table);
     while(symbol){
@@ -38,7 +39,8 @@ struct symbol* symresolver_get_symbol(struct compile_process* process, const cha
 }
 
 
-struct symbol* symresolver_get_symbol_for_native_function(struct compile_process* process, const char* name){
+struct symbol* symresolver_get_symbol_for_native_function(struct compile_process* process, const char* name)
+{
     struct symbol * sym = symresolver_get_symbol(process, name);
 
     if(!sym){
@@ -116,3 +118,4 @@ void symresolver_build_for_node(struct compile_process* process, struct node* no
     //     compile_error(process,"error in symresolver\n");
     }
 }
+

@@ -22,7 +22,10 @@ bool token_is_operator(struct token* token,const char* op)
     return token&&token->type == TOKEN_TYPE_OPERATOR && S_EQ(token->sval,op);
 }
 
-
+bool token_is_identifier(struct token* token)
+{
+    return token&&token->type == TOKEN_TYPE_IDENTIFIER ;
+}
 
 bool token_is_nl_or_comment_or_newline_seperator(struct token* token)
 {
